@@ -12,7 +12,10 @@
 #include "EOSSession.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCreateOnlineSessionCompletedDelegate, bool, bWasSuccessful, FString, Error);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFindOnlineSessionCompletedDelegate, bool, bWasSuccessful, FString, Error);
+
 class UEOSStrategyCore;
+
 USTRUCT(BlueprintType)
 struct FConnectionSettings
 {
@@ -85,15 +88,15 @@ struct FSessionInfo
 public:
 	/** The name session. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Session Settings")
-	FString SessionName;
+	FString SessionName = FString("");
 	
 	/** The name of the world associated with this session. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Session Settings")
-	FString WorldName;
+	FString WorldName = FString("");
 
 	/** The path to the world associated with this session. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Session Settings")
-	FString WorldPath;
+	FString WorldPath = FString("");
 
 	/** The port number for the server associated with this session. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Session Settings")
@@ -113,7 +116,7 @@ public:
 	/**
 	 * @brief Initializes the authenticator with the EOS strategy core.
 	 * 
-	 * @param EOSStrategyCore The EOS strategy core to be used for authentication.
+	 * @param EOSStrategyCore The EOS strategy core.
 	 */
 	void Initialize(UEOSStrategyCore* EOSStrategyCore);
 
@@ -125,13 +128,26 @@ public:
 	*/
 	UPROPERTY(BlueprintAssignable, Category = "EOS|Session|Event")
 	FOnCreateOnlineSessionCompletedDelegate OnCreateOnlineSessionCompletedDelegate;
-	
+
+	UPROPERTY(BlueprintAssignable, Category = "EOS|Session|Event")
+	FOnFindOnlineSessionCompletedDelegate OnFindOnlineSessionCompletedDelegate;
+
+	UFUNCTION(BlueprintCallable, Category = "EOS|Session|Query")
+	void FindOnlineSessions();
+
 private:
 	// Pointer to the EOS strategy core
 	UEOSStrategyCore* EOSStrategyCorePtr;
 
-	FSessionInfo* SessionInfoPtr = nullptr;
+	// Session Info store info about created session
+	FSessionInfo SessionInfoPtr;
+
+	// Used to Storage Sessions
+	TSharedPtr<class FOnlineSessionSearch> OnlineSessionSearch;
 
 	void OnCreateOnlineSessionCompleted(FName SessionName, bool bWasSuccessful);
+	void HandleSessionCreationFailure(const FString& ErrorMessage) const;
 
+	void OnFindOnlineSessionsCompleted(bool bWasSuccess);
+	void HandleFindOnlineSessionsFailure(const FString& ErrorMessage) const;
 };

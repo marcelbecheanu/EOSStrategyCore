@@ -22,6 +22,11 @@ UEOSSession* UEOSStrategyCore::GetSession()
 	return Session;
 }
 
+UEOSProfile* UEOSStrategyCore::GetProfile()
+{
+	return Profile;
+}
+
 // This function initializes the EOS subsystem and obtains the EOS identity interface.
 void UEOSStrategyCore::Init()
 {
@@ -48,6 +53,11 @@ void UEOSStrategyCore::Init()
 	Session = NewObject<UEOSSession>();
 	checkf(Session != nullptr, TEXT("Failed to initialize EOSSession Handler!"));
 	Session->Initialize(this);
+
+	// Obtain the EOS Profile Handler
+	Profile = NewObject<UEOSProfile>();
+	checkf(Profile != nullptr, TEXT("Failed to initialize EOSProfile Handler!"));
+	Profile->Initialize(this);
 }
 
 

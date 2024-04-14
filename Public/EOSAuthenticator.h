@@ -29,7 +29,7 @@ public:
     /**
      * @brief Initializes the authenticator with the EOS strategy core.
      * 
-     * @param EOSStrategyCore The EOS strategy core to be used for authentication.
+     * @param EOSStrategyCore The EOS strategy core
      */
     void Initialize(UEOSStrategyCore* EOSStrategyCore);
 

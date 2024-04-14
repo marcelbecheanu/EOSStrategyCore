@@ -9,10 +9,11 @@
 
 #pragma once
 
+#include "EOSSession.h"
+#include "EOSProfile.h"
 #include "EOSAuthenticator.h"
 #include "OnlineSubsystem.h"
 #include "CoreMinimal.h"
-#include "EOSSession.h"
 #include "Engine/GameInstance.h"
 #include "EOSStrategyCore.generated.h"
 
@@ -41,14 +42,26 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "EOS|Session")
     UEOSSession* Session;
 
-    /**
-     * @brief Retrieves the EOS Authenticator Module.
-     * 
-     * @return A pointer to the EOS Authenticator Module.
-     */
-    UFUNCTION(BlueprintCallable,Category = "EOS|Session|Query")
-    UEOSSession* GetSession();
- 
+     /**
+      * @brief Retrieves the EOS Authenticator Module.
+      * 
+      * @return A pointer to the EOS Authenticator Module.
+      */
+     UFUNCTION(BlueprintCallable,Category = "EOS|Session|Query")
+     UEOSSession* GetSession();
+
+     // Reference to the EOS Authenticator Module.
+     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "EOS|Profile")
+     UEOSProfile* Profile;
+
+     /**
+      * @brief Retrieves the EOS Authenticator Module.
+      * 
+      * @return A pointer to the EOS Authenticator Module.
+      */
+     UFUNCTION(BlueprintCallable,Category = "EOS|Profile|Query")
+     UEOSProfile* GetProfile();
+  
   
     /**
      * @brief Initializes the EOS strategy core.

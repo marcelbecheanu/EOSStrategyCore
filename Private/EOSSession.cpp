@@ -21,44 +21,34 @@ void UEOSSession::Initialize(UEOSStrategyCore* EOSStrategyCore)
 
 void UEOSSession::CreateOnlineSession(FSessionInfo SessionInfo)
 {
-	if(!EOSStrategyCorePtr->HasOnlineSubsystem())
+	SessionInfoPtr = SessionInfo;
+
+	if (!EOSStrategyCorePtr->HasOnlineSubsystem())
 	{
-		const FString ErrorMessage = "Online subsystem not available.";
-        UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
-        if (OnCreateOnlineSessionCompletedDelegate.IsBound()) {
-            OnCreateOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
-        }
+		HandleSessionCreationFailure("Online subsystem not available.");
 		return;
 	}
-
-
-	//SessionInfoPtr = &SessionInfo;
-	
-	if(!SessionInfo.ConnectionSettings.bIsDedicated)
+	if (!EOSStrategyCorePtr->HasOnlineSession())
 	{
-		if(!EOSStrategyCorePtr->HasOnlineIdentity())
+		HandleSessionCreationFailure("Online Session is not available.");
+		return;
+	}
+	if (!SessionInfo.ConnectionSettings.bIsDedicated)
+	{
+		if (!EOSStrategyCorePtr->HasOnlineIdentity())
 		{
-			const FString ErrorMessage = "Online Identity not available.";
-			UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
-			if (OnCreateOnlineSessionCompletedDelegate.IsBound()) {
-				OnCreateOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
-			}
+			HandleSessionCreationFailure("Online Identity not available.");
 			return;
 		}
 
-		if(!EOSStrategyCorePtr->GetAuthenticator()->IsAuthenticated())
+		if (!EOSStrategyCorePtr->GetAuthenticator()->IsAuthenticated())
 		{
-			const FString ErrorMessage = "Player is not authenticated.";
-			UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
-			if (OnCreateOnlineSessionCompletedDelegate.IsBound()) {
-				OnCreateOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
-			}
+			HandleSessionCreationFailure("Player is not authenticated.");
 			return;
 		}
 	}
 
 	FOnlineSessionSettings SessionCreationInfo;
-
 	SessionCreationInfo.bAllowInvites = SessionInfo.ConnectionSettings.bAllowInvites;
 	SessionCreationInfo.bAllowJoinInProgress = SessionInfo.ConnectionSettings.bAllowJoinInProgress;
 	SessionCreationInfo.bAllowJoinViaPresence = SessionInfo.ConnectionSettings.bAllowJoinViaPresence;
@@ -72,30 +62,75 @@ void UEOSSession::CreateOnlineSession(FSessionInfo SessionInfo)
 	SessionCreationInfo.bUsesStats = SessionInfo.ConnectionSettings.bUsesStats;
 	SessionCreationInfo.NumPrivateConnections = SessionInfo.ConnectionSettings.NumPrivateConnections;
 	SessionCreationInfo.NumPublicConnections = SessionInfo.ConnectionSettings.NumPublicConnections;
-
-	// TODO: ATENÇÃO PARA ALTERAR
 	SessionCreationInfo.BuildUniqueId = SessionInfo.ConnectionSettings.BuildUniqueId;
 
+	// TODO: ATENÇÃO PARA ALTERAR
 	//EOSStrategyCorePtr->GetOnlineSession()->GetSessionSettings(FName(SessionInfo.SessionName))->Set(FName("WorldName"), FString(SessionInfo.WorldName),  EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+
 	EOSStrategyCorePtr->GetOnlineSession()->OnCreateSessionCompleteDelegates.AddUObject(this, &UEOSSession::OnCreateOnlineSessionCompleted);
 	EOSStrategyCorePtr->GetOnlineSession()->CreateSession(0, FName(SessionInfo.SessionName), SessionCreationInfo);
 }
-
 void UEOSSession::OnCreateOnlineSessionCompleted(FName SessionName, bool bWasSuccessful)
 {
 	EOSStrategyCorePtr->GetOnlineSession()->ClearOnCreateSessionCompleteDelegates(this);
-	if(!bWasSuccessful)
+	if (!bWasSuccessful)
 	{
-		const FString ErrorMessage = "GENERATE MESSAGE";
-		UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
-		if (OnCreateOnlineSessionCompletedDelegate.IsBound()) {
-			OnCreateOnlineSessionCompletedDelegate.Broadcast(bWasSuccessful, *ErrorMessage);
-		}
+		HandleSessionCreationFailure("Failed to create online session.");
 		return;
 	}
 
-	GetWorld()->ServerTravel(FString(SessionInfoPtr->WorldPath + "?listen?port=7770"));
-	if (OnCreateOnlineSessionCompletedDelegate.IsBound()) {
-		OnCreateOnlineSessionCompletedDelegate.Broadcast(true, FString("Server has Started!"));
+	bool bHasHosted = EOSStrategyCorePtr->GetWorld()->ServerTravel(FString(SessionInfoPtr.WorldPath + "?listen?port=" + FString::FromInt(SessionInfoPtr.PortServer)));
+	if (OnCreateOnlineSessionCompletedDelegate.IsBound())
+	{
+		OnCreateOnlineSessionCompletedDelegate.Broadcast(bHasHosted, bHasHosted ? "Server has Started!" : "Failed to create online session. Check your internet connection and try again later.");
 	}
 }
+void UEOSSession::HandleSessionCreationFailure(const FString& ErrorMessage) const
+{
+	UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
+	if (OnCreateOnlineSessionCompletedDelegate.IsBound())
+	{
+		OnCreateOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
+	}
+}
+
+void UEOSSession::FindOnlineSessions()
+{
+	if (!EOSStrategyCorePtr->HasOnlineSubsystem())
+	{
+		HandleFindOnlineSessionsFailure("Online subsystem not available.");
+		return;
+	}
+
+	if (!EOSStrategyCorePtr->HasOnlineSession())
+	{
+		HandleFindOnlineSessionsFailure("Online Session is not available.");
+		return;
+	}
+	
+	if (!EOSStrategyCorePtr->GetAuthenticator()->IsAuthenticated())
+	{
+		HandleFindOnlineSessionsFailure("Player authentication failed. Please log in to your account.");
+		return;
+	}
+
+	OnlineSessionSearch = MakeShareable(new FOnlineSessionSearch());
+	EOSStrategyCorePtr->GetOnlineSession()->FindSessions(0, OnlineSessionSearch.ToSharedRef());
+	EOSStrategyCorePtr->GetOnlineSession()->OnFindSessionsCompleteDelegates.AddUObject(this, &UEOSSession::OnFindOnlineSessionsCompleted);
+	
+}
+
+void UEOSSession::OnFindOnlineSessionsCompleted(bool bWasSuccess)
+{
+	
+}
+
+void UEOSSession::HandleFindOnlineSessionsFailure(const FString& ErrorMessage) const
+{
+	UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
+	if (OnFindOnlineSessionCompletedDelegate.IsBound())
+	{
+		OnFindOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
+	}
+}
+
