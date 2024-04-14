@@ -7,9 +7,9 @@
  * 
  */
 
+#include "EOSSession.h"
 #include "OnlineSessionSettings.h"
 #include "EOSStrategyCore.h"
-#include "EOSSession.h"
 
 #include "Interfaces/OnlineSessionInterface.h"
 
@@ -65,8 +65,8 @@ void UEOSSession::CreateOnlineSession(FSessionInfo SessionInfo)
 	SessionCreationInfo.BuildUniqueId = SessionInfo.ConnectionSettings.BuildUniqueId;
 
 	// TODO: ATENÇÃO PARA ALTERAR
-	//EOSStrategyCorePtr->GetOnlineSession()->GetSessionSettings(FName(SessionInfo.SessionName))->Set(FName("WorldName"), FString(SessionInfo.WorldName),  EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-
+	// EOSStrategyCorePtr->GetOnlineSession()->GetSessionSettings(FName(SessionInfo.SessionName))->Set(FName("WorldName"), FString(SessionInfo.WorldName),  EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	SessionCreationInfo.Settings.Add(FName("WORLD"), FOnlineSessionSetting((FString("TESTE")), EOnlineDataAdvertisementType::ViaOnlineService));
 	EOSStrategyCorePtr->GetOnlineSession()->OnCreateSessionCompleteDelegates.AddUObject(this, &UEOSSession::OnCreateOnlineSessionCompleted);
 	EOSStrategyCorePtr->GetOnlineSession()->CreateSession(0, FName(SessionInfo.SessionName), SessionCreationInfo);
 }
@@ -94,7 +94,7 @@ void UEOSSession::HandleSessionCreationFailure(const FString& ErrorMessage) cons
 	}
 }
 
-void UEOSSession::FindOnlineSessions()
+void UEOSSession::FindOnlineSessions(FSearchSettings SearchSettings)
 {
 	if (!EOSStrategyCorePtr->HasOnlineSubsystem())
 	{
@@ -115,13 +115,27 @@ void UEOSSession::FindOnlineSessions()
 	}
 
 	OnlineSessionSearch = MakeShareable(new FOnlineSessionSearch());
+	OnlineSessionSearch->bIsLanQuery = SearchSettings.bIsLanQuery;
+	OnlineSessionSearch->PingBucketSize = SearchSettings.PingBucketSize;
+	OnlineSessionSearch->MaxSearchResults = SearchSettings.MaxSearchResults;
+	OnlineSessionSearch->TimeoutInSeconds = SearchSettings.TimeoutInSeconds;
+	OnlineSessionSearch->PlatformHash = SearchSettings.PlatformHash;
+	OnlineSessionSearch->QuerySettings.SearchParams.Empty();
 	EOSStrategyCorePtr->GetOnlineSession()->FindSessions(0, OnlineSessionSearch.ToSharedRef());
 	EOSStrategyCorePtr->GetOnlineSession()->OnFindSessionsCompleteDelegates.AddUObject(this, &UEOSSession::OnFindOnlineSessionsCompleted);
-	
 }
 
 void UEOSSession::OnFindOnlineSessionsCompleted(bool bWasSuccess)
 {
+	EOSStrategyCorePtr->GetOnlineSession()->ClearOnFindSessionsCompleteDelegates(this);
+	UE_LOG(LogTemp, Warning, TEXT("Online Session Search Completed: %s"), bWasSuccess ? TEXT("Success") : TEXT("Failed"));
+	UE_LOG(LogTemp, Warning, TEXT("Number of Sessions Found: %d"), OnlineSessionSearch->SearchResults.Num());
+
+	if(!bWasSuccess)
+	{
+		HandleFindOnlineSessionsFailure("GENERATE MESSAGE");
+		return;
+	}
 	
 }
 

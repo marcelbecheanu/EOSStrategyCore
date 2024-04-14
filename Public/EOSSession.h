@@ -107,6 +107,35 @@ public:
 	FConnectionSettings ConnectionSettings;
 };
 
+USTRUCT(BlueprintType)
+struct FSearchSettings
+{
+	GENERATED_BODY()
+	
+public:
+	
+	/** Whether the query is intended for LAN matches or not */
+    UPROPERTY(BlueprintReadWrite, Category = "Search Settings")
+    bool bIsLanQuery = false;
+
+    /** Max number of queries returned by the matchmaking service */
+    UPROPERTY(BlueprintReadWrite, Category = "Search Settings")
+    int32 MaxSearchResults = 1000000;
+
+    /** Used to sort games into buckets since a the difference in terms of feel for ping in the same bucket is often not a useful comparison and skill is better */
+    UPROPERTY(BlueprintReadWrite, Category = "Search Settings")
+    int32 PingBucketSize = 0;
+
+    /** Search hash used by the online subsystem to disambiguate search queries, stamped every time FindSession is called */
+    UPROPERTY(BlueprintReadWrite, Category = "Search Settings")
+    int32 PlatformHash = 0;
+
+    /** Amount of time to wait for the search results. May not apply to all platforms. */
+    UPROPERTY(BlueprintReadWrite, Category = "Search Settings")
+    float TimeoutInSeconds;
+
+};
+
 UCLASS()
 class EOSSTRATEGY_API UEOSSession : public UObject
 {
@@ -133,7 +162,7 @@ public:
 	FOnFindOnlineSessionCompletedDelegate OnFindOnlineSessionCompletedDelegate;
 
 	UFUNCTION(BlueprintCallable, Category = "EOS|Session|Query")
-	void FindOnlineSessions();
+	void FindOnlineSessions(FSearchSettings SearchSettings);
 
 private:
 	// Pointer to the EOS strategy core
