@@ -12,6 +12,7 @@
 #include "EOSStrategyCore.h"
 
 #include "Interfaces/OnlineSessionInterface.h"
+#include "Kismet/GameplayStatics.h"
 
 void UEOSSession::Initialize(UEOSStrategyCore* EOSStrategyCore)
 {
@@ -48,6 +49,9 @@ void UEOSSession::CreateOnlineSession(FSessionInfo SessionInfo)
 		}
 	}
 
+	FGuid UUID = FGuid::NewGuid();
+	FString UUIDString = UUID.ToString();
+	
 	FOnlineSessionSettings SessionCreationInfo;
 	SessionCreationInfo.bAllowInvites = SessionInfo.ConnectionSettings.bAllowInvites;
 	SessionCreationInfo.bAllowJoinInProgress = SessionInfo.ConnectionSettings.bAllowJoinInProgress;
@@ -64,11 +68,13 @@ void UEOSSession::CreateOnlineSession(FSessionInfo SessionInfo)
 	SessionCreationInfo.NumPublicConnections = SessionInfo.ConnectionSettings.NumPublicConnections;
 	SessionCreationInfo.BuildUniqueId = SessionInfo.ConnectionSettings.BuildUniqueId;
 
-	// TODO: ATENÇÃO PARA ALTERAR
-	// EOSStrategyCorePtr->GetOnlineSession()->GetSessionSettings(FName(SessionInfo.SessionName))->Set(FName("WorldName"), FString(SessionInfo.WorldName),  EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-	SessionCreationInfo.Settings.Add(FName("WORLD"), FOnlineSessionSetting((FString("TESTE")), EOnlineDataAdvertisementType::ViaOnlineService));
+	// TODO: Permitir adicionar Chaves de pesquisa.
+	
+	SessionCreationInfo.Settings.Add(FName("NAME"), FOnlineSessionSetting((FString(SessionInfo.SessionName)), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing));
+	SessionCreationInfo.Settings.Add(FName("WORLD"), FOnlineSessionSetting((FString(SessionInfo.WorldName)), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing));
+
 	EOSStrategyCorePtr->GetOnlineSession()->OnCreateSessionCompleteDelegates.AddUObject(this, &UEOSSession::OnCreateOnlineSessionCompleted);
-	EOSStrategyCorePtr->GetOnlineSession()->CreateSession(0, FName(SessionInfo.SessionName), SessionCreationInfo);
+	EOSStrategyCorePtr->GetOnlineSession()->CreateSession(0, FName(UUIDString), SessionCreationInfo);
 }
 void UEOSSession::OnCreateOnlineSessionCompleted(FName SessionName, bool bWasSuccessful)
 {
@@ -101,13 +107,11 @@ void UEOSSession::FindOnlineSessions(FSearchSettings SearchSettings)
 		HandleFindOnlineSessionsFailure("Online subsystem not available.");
 		return;
 	}
-
 	if (!EOSStrategyCorePtr->HasOnlineSession())
 	{
 		HandleFindOnlineSessionsFailure("Online Session is not available.");
 		return;
 	}
-	
 	if (!EOSStrategyCorePtr->GetAuthenticator()->IsAuthenticated())
 	{
 		HandleFindOnlineSessionsFailure("Player authentication failed. Please log in to your account.");
@@ -120,11 +124,13 @@ void UEOSSession::FindOnlineSessions(FSearchSettings SearchSettings)
 	OnlineSessionSearch->MaxSearchResults = SearchSettings.MaxSearchResults;
 	OnlineSessionSearch->TimeoutInSeconds = SearchSettings.TimeoutInSeconds;
 	OnlineSessionSearch->PlatformHash = SearchSettings.PlatformHash;
+
+	// TODO: Permitir pesquisa por chaves.
+	
 	OnlineSessionSearch->QuerySettings.SearchParams.Empty();
 	EOSStrategyCorePtr->GetOnlineSession()->FindSessions(0, OnlineSessionSearch.ToSharedRef());
 	EOSStrategyCorePtr->GetOnlineSession()->OnFindSessionsCompleteDelegates.AddUObject(this, &UEOSSession::OnFindOnlineSessionsCompleted);
 }
-
 void UEOSSession::OnFindOnlineSessionsCompleted(bool bWasSuccess)
 {
 	EOSStrategyCorePtr->GetOnlineSession()->ClearOnFindSessionsCompleteDelegates(this);
@@ -133,18 +139,77 @@ void UEOSSession::OnFindOnlineSessionsCompleted(bool bWasSuccess)
 
 	if(!bWasSuccess)
 	{
-		HandleFindOnlineSessionsFailure("GENERATE MESSAGE");
+		HandleFindOnlineSessionsFailure("Failed to find online sessions.");
 		return;
 	}
-	
-}
 
+	// Success: Process search results
+	TArray<FSessionServer> Servers;
+	for (const FOnlineSessionSearchResult& SearchResult : OnlineSessionSearch->SearchResults)
+	{
+		Servers.Add(FSessionServer(SearchResult));
+	}
+	
+	if (OnFindOnlineSessionCompletedDelegate.IsBound())
+	{
+		OnFindOnlineSessionCompletedDelegate.Broadcast(Servers, false, "Success!");
+	}
+}
 void UEOSSession::HandleFindOnlineSessionsFailure(const FString& ErrorMessage) const
 {
 	UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
 	if (OnFindOnlineSessionCompletedDelegate.IsBound())
 	{
-		OnFindOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
+		TArray<FSessionServer> servers;
+		OnFindOnlineSessionCompletedDelegate.Broadcast(servers, false, ErrorMessage);
 	}
 }
 
+void UEOSSession::JoinOnlineSession(FSessionServer SessionServer)
+{
+	if (!EOSStrategyCorePtr->HasOnlineSubsystem())
+	{
+		HandleJoinOnlineSessionFailure("Online subsystem not available.");
+		return;
+	}
+	if (!EOSStrategyCorePtr->HasOnlineSession())
+	{
+		HandleJoinOnlineSessionFailure("Online Session is not available.");
+		return;
+	}
+	if (!EOSStrategyCorePtr->GetAuthenticator()->IsAuthenticated())
+	{
+		HandleJoinOnlineSessionFailure("Player authentication failed. Please log in to your account.");
+		return;
+	}
+	
+	EOSStrategyCorePtr->GetOnlineSession()->OnJoinSessionCompleteDelegates.AddUObject(this, &UEOSSession::OnJoinSessionCompleted);
+	EOSStrategyCorePtr->GetOnlineSession()->JoinSession(0, FName(""), SessionServer.OnlineSessionSearchResult);
+}
+void UEOSSession::OnJoinSessionCompleted(FName SessionName, EOnJoinSessionCompleteResult::Type Result) const
+{
+	// TODO: EOSStrategyCorePtr->GetOnlineSession()->ClearOnJoinSessionCompleteDelegates();
+	// TODO: VERIFICAR OS OUTROS TIPOS DE ERROR
+	if (Result == EOnJoinSessionCompleteResult::Success)
+	{
+		FString ConnectionInfo;
+		if (!EOSStrategyCorePtr->GetOnlineSession()->GetResolvedConnectString(SessionName, ConnectionInfo) || ConnectionInfo.IsEmpty()) {
+			HandleJoinOnlineSessionFailure("Error obtaining connection string");
+			return;
+		}
+
+		if (APlayerController* PlayerController = UGameplayStatics::GetPlayerController(EOSStrategyCorePtr->GetWorld(), 0)) {
+			UE_LOG(LogTemp, Log, TEXT("Connection Info: %s"), *ConnectionInfo);
+			PlayerController->ClientTravel(ConnectionInfo, ETravelType::TRAVEL_Absolute);
+		}
+	}
+}
+
+void UEOSSession::HandleJoinOnlineSessionFailure(const FString& ErrorMessage) const
+{
+	UE_LOG(LogTemp, Error, TEXT("%s"), *ErrorMessage);
+	if (OnJoinOnlineSessionCompletedDelegate.IsBound())
+	{
+		OnJoinOnlineSessionCompletedDelegate.Broadcast(false, ErrorMessage);
+	}
+}

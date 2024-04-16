@@ -9,10 +9,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "OnlineSessionSettings.h"
+#include "Interfaces/OnlineSessionInterface.h"
 #include "EOSSession.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCreateOnlineSessionCompletedDelegate, bool, bWasSuccessful, FString, Error);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnFindOnlineSessionCompletedDelegate, bool, bWasSuccessful, FString, Error);
 
 class UEOSStrategyCore;
 
@@ -132,9 +132,63 @@ public:
 
     /** Amount of time to wait for the search results. May not apply to all platforms. */
     UPROPERTY(BlueprintReadWrite, Category = "Search Settings")
-    float TimeoutInSeconds;
+    float TimeoutInSeconds = 0.0f;
 
 };
+
+USTRUCT(BlueprintType)
+struct FSessionServer
+{
+	GENERATED_BODY()
+
+public:
+	FOnlineSessionSearchResult OnlineSessionSearchResult;
+	
+	FSessionServer() : Ping(0), CurrentPlayers(0), MaxPlayers(0) {} 
+
+	FSessionServer(FOnlineSessionSearchResult SearchResult) {
+		OnlineSessionSearchResult = SearchResult;
+		
+		FOnlineSession Session = OnlineSessionSearchResult.Session;
+		ID = Session.GetSessionIdStr();
+		
+		FString Value;
+		Session.SessionSettings.Get(FName("NAME"), Value);
+		Name = FString(Value);
+
+		Session.SessionSettings.Get(FName("WORLD"), Value);
+		World = FString(Value);
+
+		Ping = OnlineSessionSearchResult.PingInMs;
+		
+		CurrentPlayers = Session.SessionSettings.NumPublicConnections - Session.NumOpenPublicConnections;
+		MaxPlayers = Session.SessionSettings.NumPublicConnections;
+	}
+	
+	UPROPERTY(BlueprintReadWrite, Category = "Session Server")
+	FString ID;
+	
+	UPROPERTY(BlueprintReadWrite, Category = "Session Server")
+	FString Name;
+	
+	UPROPERTY(BlueprintReadWrite, Category = "Session Server")
+	FString World;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Session Server")
+	int32 Ping = 0;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Session Server")
+	int32 CurrentPlayers = 0;
+	
+	UPROPERTY(BlueprintReadWrite, Category = "Session Server")
+	int32 MaxPlayers = 0;
+	
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCreateOnlineSessionCompletedDelegate, bool, bWasSuccessful, FString, Error);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnFindOnlineSessionCompletedDelegate, const TArray<FSessionServer>&, Sessions, bool, bWasSuccessful, FString, Error);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnJoinOnlineSessionCompletedDelegate, bool, bWasSuccessful, FString, Error);
+
 
 UCLASS()
 class EOSSTRATEGY_API UEOSSession : public UObject
@@ -161,9 +215,16 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "EOS|Session|Event")
 	FOnFindOnlineSessionCompletedDelegate OnFindOnlineSessionCompletedDelegate;
 
+	UPROPERTY(BlueprintAssignable, Category = "EOS|Session|Event")
+	FOnJoinOnlineSessionCompletedDelegate OnJoinOnlineSessionCompletedDelegate;
+
+
 	UFUNCTION(BlueprintCallable, Category = "EOS|Session|Query")
 	void FindOnlineSessions(FSearchSettings SearchSettings);
 
+	UFUNCTION(BlueprintCallable, Category= "EOS|Session|Action")
+	void JoinOnlineSession(FSessionServer SessionServer);
+	
 private:
 	// Pointer to the EOS strategy core
 	UEOSStrategyCore* EOSStrategyCorePtr;
@@ -179,4 +240,8 @@ private:
 
 	void OnFindOnlineSessionsCompleted(bool bWasSuccess);
 	void HandleFindOnlineSessionsFailure(const FString& ErrorMessage) const;
+
+	void OnJoinSessionCompleted(FName SessionName, EOnJoinSessionCompleteResult::Type Result) const;
+	void HandleJoinOnlineSessionFailure(const FString& ErrorMessage) const;
+
 };
